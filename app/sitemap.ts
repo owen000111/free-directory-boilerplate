@@ -152,40 +152,45 @@
 // }
 
 
+
 import { env } from "@/env.mjs";
-import { type MetadataRoute } from 'next';
+import { type MetadataRoute } from "next";
 import { i18n } from "../i18n-config";
-// import { sanityFetch } from "@/sanity/lib/fetch";  // 暂时注释掉
-// import { AppListQueryForSitemapResult, ... } from "@/sanity.types";
-// import { appListQueryForSitemap, ... } from "@/sanity/lib/queries";
 
 const site_url = env.NEXT_PUBLIC_APP_URL;
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  try {
-    const sitemapList: MetadataRoute.Sitemap = [];
+const isBuild = process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
 
-    // 最小首页 sitemap
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  if (isBuild) {
+    // 构建阶段，返回最小 sitemap，避免 session/API 调用
+    const sitemapList: MetadataRoute.Sitemap = [];
     i18n.locales.forEach((locale) => {
       sitemapList.push({
         url: `${site_url}/${locale}`,
         lastModified: new Date(),
-        changeFrequency: 'daily',
+        changeFrequency: "daily",
         priority: 1,
       });
     });
-
     return sitemapList;
-
-  } catch (e) {
-    console.warn("sitemap build error, returning minimal sitemap:", e);
-    return [
-      {
-        url: `${site_url}/`,
-        lastModified: new Date(),
-        changeFrequency: 'daily',
-        priority: 1,
-      },
-    ];
+  } else {
+    // 开发/本地环境，可以使用原来的完整逻辑
+    try {
+      const sitemapList: MetadataRoute.Sitemap = [];
+      // 这里可以放原来的 sanityFetch + app/category/product sitemap 逻辑
+      return sitemapList;
+    } catch (e) {
+      console.warn("sitemap build error:", e);
+      return [
+        {
+          url: `${site_url}/`,
+          lastModified: new Date(),
+          changeFrequency: "daily",
+          priority: 1,
+        },
+      ];
+    }
   }
 }
+
