@@ -157,38 +157,117 @@ import { env } from "@/env.mjs";
 
 const site_url = env.NEXT_PUBLIC_APP_URL;
 
-/**
- * 最小化 sitemap，只包含首页和多语言路由
- * 适合 Vercel 构建阶段，不依赖 Sanity API
- */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
-    const sitemapList: MetadataRoute.Sitemap = [];
-
-    // 遍历多语言，生成首页 sitemap
-    i18n.locales.forEach((locale) => {
-      sitemapList.push({
+    // 构建阶段只返回最小 sitemap
+    if (process.env.NEXT_PUBLIC_APP_URL && process.env.VERCEL_ENV === "production") {
+      const minimalSitemap = i18n.locales.map((locale) => ({
         url: `${site_url}/${locale}`,
         lastModified: new Date(),
         changeFrequency: "daily",
         priority: 1,
+      }));
+
+      return minimalSitemap;
+    }
+
+    // 运行时动态 import Sanity
+    const { sanityFetch } = await import("@/sanity/lib/fetch");
+    const {
+      appListQueryForSitemap,
+      appTypeListQueryForSitemap,
+      categoryListQueryForSitemap,
+      productListQueryForSitemap,
+    } = await import("@/sanity/lib/queries");
+
+    const [apps, appTypes, categories, products] = await Promise.all([
+      sanityFetch({ query: appListQueryForSitemap }),
+      sanityFetch({ query: appTypeListQueryForSitemap }),
+      sanityFetch({ query: categoryListQueryForSitemap }),
+      sanityFetch({ query: productListQueryForSitemap }),
+    ]);
+
+    const sitemapList: MetadataRoute.Sitemap = [];
+
+    // 基础静态页面
+    const baseRoutes = ["", "dashboard/submit", "dashboard/app", "about", "privacy", "terms"];
+    baseRoutes.forEach((route) => {
+      i18n.locales.forEach((locale) => {
+        const lang = `/${locale}`;
+        const routeUrl = route === "" ? "" : `/${route}`;
+        sitemapList.push({
+          url: `${site_url}${lang}${routeUrl}`,
+          lastModified: new Date(),
+          changeFrequency: "daily",
+          priority: 1,
+        });
+      });
+    });
+
+    // App 列表
+    apps.forEach((app: any) => {
+      if (!app.slug) return;
+      i18n.locales.forEach((locale) => {
+        sitemapList.push({
+          url: `${site_url}/${locale}/app/${app.slug}`,
+          lastModified: new Date(),
+          changeFrequency: "daily",
+          priority: 1,
+        });
+      });
+    });
+
+    // AppType 列表
+    appTypes.forEach((type: any) => {
+      if (!type.slug) return;
+      i18n.locales.forEach((locale) => {
+        sitemapList.push({
+          url: `${site_url}/${locale}/apptype/${type.slug}`,
+          lastModified: new Date(),
+          changeFrequency: "daily",
+          priority: 1,
+        });
+      });
+    });
+
+    // Category 列表
+    categories.forEach((category: any) => {
+      if (!category.slug || !category.group?.slug) return;
+      i18n.locales.forEach((locale) => {
+        sitemapList.push({
+          url: `${site_url}/${locale}/group/${category.group.slug}/category/${category.slug}`,
+          lastModified: new Date(),
+          changeFrequency: "daily",
+          priority: 1,
+        });
+      });
+    });
+
+    // Product 列表
+    products.forEach((product: any) => {
+      if (!product.slug) return;
+      i18n.locales.forEach((locale) => {
+        sitemapList.push({
+          url: `${site_url}/${locale}/product/${product.slug}`,
+          lastModified: new Date(),
+          changeFrequency: "daily",
+          priority: 1,
+        });
       });
     });
 
     return sitemapList;
   } catch (e) {
-    console.warn("sitemap build error, returning fallback sitemap:", e);
-
-    // 兜底 sitemap
-    return [
-      {
-        url: `${site_url}/`,
-        lastModified: new Date(),
-        changeFrequency: "daily",
-        priority: 1,
-      },
-    ];
+    console.warn("sitemap error, fallback to minimal:", e);
+    // 返回最小 sitemap 避免构建失败
+    return i18n.locales.map((locale) => ({
+      url: `${site_url}/${locale}`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 1,
+    }));
   }
 }
+
 
 
