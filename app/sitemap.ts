@@ -151,19 +151,21 @@
 //     return sitemapList;
 // }
 
-
-import { env } from "@/env.mjs";
 import { type MetadataRoute } from "next";
 import { i18n } from "../i18n-config";
+import { env } from "@/env.mjs";
 
 const site_url = env.NEXT_PUBLIC_APP_URL;
 
-const isBuild = process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
-
+/**
+ * 最小化 sitemap，只包含首页和多语言路由
+ * 适合 Vercel 构建阶段，不依赖 Sanity API
+ */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  if (isBuild) {
-    // 构建阶段，只返回最小 sitemap
+  try {
     const sitemapList: MetadataRoute.Sitemap = [];
+
+    // 遍历多语言，生成首页 sitemap
     i18n.locales.forEach((locale) => {
       sitemapList.push({
         url: `${site_url}/${locale}`,
@@ -172,24 +174,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 1,
       });
     });
-    return sitemapList;
-  } else {
-    // 开发环境再动态导入 Sanity fetch
-    const { sanityFetch } = await import("@/sanity/lib/fetch");
-    const { appListQueryForSitemap, categoryListQueryForSitemap } = await import("@/sanity/lib/queries");
-
-    const sitemapList: MetadataRoute.Sitemap = [];
-
-    try {
-      // 这里可以安全调用 sanityFetch
-      const appList = await sanityFetch({ query: appListQueryForSitemap });
-      // 遍历 appList 构建 sitemapList
-      console.log("dev sitemap:", appList.length);
-    } catch (e) {
-      console.warn("dev sitemap fetch error:", e);
-    }
 
     return sitemapList;
+  } catch (e) {
+    console.warn("sitemap build error, returning fallback sitemap:", e);
+
+    // 兜底 sitemap
+    return [
+      {
+        url: `${site_url}/`,
+        lastModified: new Date(),
+        changeFrequency: "daily",
+        priority: 1,
+      },
+    ];
   }
 }
 
